@@ -13,6 +13,14 @@ Example
 
 
 ```
+package main
+
+import (
+	"net/http"
+
+	"github.com/utilitywarehouse/go-operational/op"
+)
+
 func main() {
 	http.Handle("/__/", op.NewHandler(
 		op.NewStatus("My application", "application that does stuff").
