@@ -1,7 +1,7 @@
 go-operational
 ==============
 
-Go implememntation of [operational-endpoints-spec](https://github.com/utilitywarehouse/operational-endpoints-spec) making it easy to add the standard endpoints to your application
+Go implementation of [operational-endpoints-spec](https://github.com/utilitywarehouse/operational-endpoints-spec) making it easy to add the standard endpoints to your application
 
 Installation
 ------------
