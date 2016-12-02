@@ -8,6 +8,10 @@ import (
 )
 
 func newHealthCheckHandler(hc *Status) http.Handler {
+	if len(hc.checkers) == 0 {
+		return http.NotFoundHandler()
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
