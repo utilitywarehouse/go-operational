@@ -19,15 +19,16 @@ func newHealthCheckHandler(hc *Status) http.Handler {
 }
 
 func newReadyHandler(hc *Status) http.Handler {
+	if hc.ready == nil {
+		return http.NotFoundHandler()
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case hc.ready == nil:
-			http.NotFoundHandler().ServeHTTP(w, r)
-		case hc.ready():
+		if hc.ready() {
 			w.Header().Add("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintf(w, "ready\n")
-		default:
+		} else {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
 	})
