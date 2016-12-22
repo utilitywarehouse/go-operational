@@ -14,9 +14,7 @@ func newHealthCheckHandler(hc *Status) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
-		enc := json.NewEncoder(w)
-		enc.SetIndent("  ", "  ")
-		if err := enc.Encode(hc.Check()); err != nil {
+		if err := newEncoder(w).Encode(hc.Check()); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	})
