@@ -1,5 +1,11 @@
 package op
 
+import (
+	"os"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
+
 const (
 	healthy   = "healthy"
 	degraded  = "degraded"
@@ -14,59 +20,71 @@ func NewStatus(name, description string) *Status {
 
 // AddOwner adds an owner entry. Each can have a name, a slack channel or both.
 // Multiple owner entries are allowed.
-func (os *Status) AddOwner(name, slack string) *Status {
-	os.owners = append(os.owners, owner{name: name, slack: slack})
-	return os
+func (s *Status) AddOwner(name, slack string) *Status {
+	s.owners = append(s.owners, owner{name: name, slack: slack})
+	return s
 }
 
 // AddLink adds a URL link. Multiple are allowed and each should have a brief
 // description.
-func (os *Status) AddLink(description, url string) *Status {
-	os.links = append(os.links, link{description: description, url: url})
-	return os
+func (s *Status) AddLink(description, url string) *Status {
+	s.links = append(s.links, link{description: description, url: url})
+	return s
 }
 
 // SetRevision sets the source control revision string, typically a git hash.
-func (os *Status) SetRevision(revision string) *Status {
-	os.revision = revision
-	return os
+func (s *Status) SetRevision(revision string) *Status {
+	s.revision = revision
+	return s
 }
 
 // AddChecker adds a function that can check the applications health.
 // Multiple checkers are allowed.  The checker functions should be capable of
 // being called concurrently (with each other and with themselves).
-func (os *Status) AddChecker(name string, checkerFunc func(cr *CheckResponse)) *Status {
-	os.checkers = append(os.checkers, checker{name, checkerFunc})
-	return os
+func (s *Status) AddChecker(name string, checkerFunc func(cr *CheckResponse)) *Status {
+	s.checkers = append(s.checkers, checker{name, checkerFunc})
+	return s
+}
+
+// AddMetrics registers prometheus metrics to be exopsed on the /__/metrics endpoint
+// Adding the same metric twice will result in a panic
+func (s *Status) AddMetrics(cs ...prometheus.Collector) *Status {
+	if s.promRegistry == nil {
+		s.promRegistry = prometheus.NewRegistry()
+		s.promRegistry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+		s.promRegistry.MustRegister(prometheus.NewGoCollector())
+	}
+	s.promRegistry.MustRegister(cs...)
+	return s
 }
 
 // ReadyNone indicates that this application doesn't expose a concept of
 // readiness.
-func (os *Status) ReadyNone() *Status {
-	os.ready = nil
-	return os
+func (s *Status) ReadyNone() *Status {
+	s.ready = nil
+	return s
 }
 
 // ReadyAlways indicates that this application is always ready, typically if it
 // has no external systems to depend upon.
-func (os *Status) ReadyAlways() *Status {
-	os.ready = func() bool { return true }
-	return os
+func (s *Status) ReadyAlways() *Status {
+	s.ready = func() bool { return true }
+	return s
 }
 
 // ReadyNever indicates that this application is never ready. Typically this is
 // only useful in testing.
-func (os *Status) ReadyNever() *Status {
-	os.ready = func() bool { return false }
-	return os
+func (s *Status) ReadyNever() *Status {
+	s.ready = func() bool { return false }
+	return s
 }
 
 // ReadyUseHealthCheck indicates that the readiness of this application should
 // re-use the health check. If the health is "ready" or "degraded" the
 // application is considered ready.
-func (os *Status) ReadyUseHealthCheck() *Status {
-	os.ready = func() bool {
-		switch os.Check().Health {
+func (s *Status) ReadyUseHealthCheck() *Status {
+	s.ready = func() bool {
+		switch s.Check().Health {
 		case healthy:
 			return true
 		case degraded:
@@ -75,24 +93,24 @@ func (os *Status) ReadyUseHealthCheck() *Status {
 			return false
 		}
 	}
-	return os
+	return s
 }
 
 // Ready allows specifying any readiness function.
-func (os *Status) Ready(f func() bool) *Status {
-	os.ready = f
-	return os
+func (s *Status) Ready(f func() bool) *Status {
+	s.ready = f
+	return s
 }
 
 // Check returns the current health state of the application.
-func (os *Status) Check() HealthResult {
+func (s *Status) Check() HealthResult {
 	hr := HealthResult{
-		Name:         os.name,
-		Description:  os.description,
-		CheckResults: make([]healthResultEntry, len(os.checkers)),
+		Name:         s.name,
+		Description:  s.description,
+		CheckResults: make([]healthResultEntry, len(s.checkers)),
 	}
 
-	for i, checker := range os.checkers {
+	for i, checker := range s.checkers {
 		var cr CheckResponse
 		checker.checkFunc(&cr)
 		hr.CheckResults[i] = healthResultEntry{
@@ -132,17 +150,17 @@ func (os *Status) Check() HealthResult {
 }
 
 // About returns static information about this application or service.
-func (os *Status) About() AboutResponse {
+func (s *Status) About() AboutResponse {
 	about := AboutResponse{
-		Name:        os.name,
-		Description: os.description,
-		BuildInfo:   buildInfoResponse{Revision: os.revision},
+		Name:        s.name,
+		Description: s.description,
+		BuildInfo:   buildInfoResponse{Revision: s.revision},
 	}
 
-	for _, l := range os.links {
+	for _, l := range s.links {
 		about.Links = append(about.Links, linkResponse{l.description, l.url})
 	}
-	for _, o := range os.owners {
+	for _, o := range s.owners {
 		about.Owners = append(about.Owners, ownerResponse{o.name, o.slack})
 	}
 	return about
@@ -151,13 +169,14 @@ func (os *Status) About() AboutResponse {
 // Status represents standard operational information about an application,
 // including how to establish dynamic information such as health or readiness.
 type Status struct {
-	name        string
-	description string
-	owners      []owner
-	links       []link
-	revision    string
-	checkers    []checker
-	ready       func() bool
+	name         string
+	description  string
+	owners       []owner
+	links        []link
+	revision     string
+	checkers     []checker
+	ready        func() bool
+	promRegistry *prometheus.Registry
 }
 
 type owner struct {

@@ -3,8 +3,10 @@ package op
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -56,11 +58,6 @@ func TestAboutHandler(t *testing.T) {
 	}
 
 	assert.Equal(expectedAbout, rr.Body.String())
-
-	if rr.Body.String() != expectedAbout {
-		t.Errorf("expected body:\n%s\nbut got\n%v\n",
-			expectedAbout, rr.Body.String())
-	}
 }
 
 var expectedHealth = `{
@@ -120,11 +117,6 @@ func TestHealthCheckHandler(t *testing.T) {
 	}
 
 	assert.Equal(expectedHealth, rr.Body.String())
-
-	if rr.Body.String() != expectedHealth {
-		t.Errorf("expected body:\n%s\nbut got\n%v\n",
-			expectedHealth, rr.Body.String())
-	}
 }
 
 func TestReadyHandlerReady(t *testing.T) {
@@ -203,4 +195,29 @@ func TestReadyHandlerDefaults(t *testing.T) {
 	if status := rr.Code; status != http.StatusNotFound {
 		t.Errorf("expected status %v but got %v", http.StatusNotFound, status)
 	}
+}
+
+func TestMetricsHandler(t *testing.T) {
+	assert := assert.New(t)
+	metric := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "test_metric",
+		Help: "Dummy counter",
+	})
+
+	s := &Status{}
+	s.AddMetrics(metric)
+	h := NewHandler(s)
+
+	metric.Inc()
+
+	req, err := http.NewRequest("GET", "/__/metrics", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	assert.Equal(http.StatusOK, rr.Code, "Response status should be 200")
+	assert.True(strings.Contains(rr.Body.String(), "test_metric 1\n"), "Metrics response should contain dummy metric")
 }

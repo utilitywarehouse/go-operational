@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func newHealthCheckHandler(hc *Status) http.Handler {
@@ -61,5 +63,6 @@ func NewHandler(os *Status) http.Handler {
 	m.Handle("/__/about", newAboutHandler(os))
 	m.Handle("/__/health", newHealthCheckHandler(os))
 	m.Handle("/__/ready", newReadyHandler(os))
+	m.Handle("/__/metrics", promhttp.HandlerFor(os.promRegistry, promhttp.HandlerOpts{}))
 	return m
 }
