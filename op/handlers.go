@@ -63,6 +63,6 @@ func NewHandler(os *Status) http.Handler {
 	m.Handle("/__/about", newAboutHandler(os))
 	m.Handle("/__/health", newHealthCheckHandler(os))
 	m.Handle("/__/ready", newReadyHandler(os))
-	m.Handle("/__/metrics", promhttp.HandlerFor(os.promRegistry, promhttp.HandlerOpts{}))
+	m.Handle("/__/metrics", promhttp.Handler())
 	return m
 }
