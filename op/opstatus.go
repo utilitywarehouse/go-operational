@@ -1,10 +1,6 @@
 package op
 
-import (
-	"os"
-
-	"github.com/prometheus/client_golang/prometheus"
-)
+import "github.com/prometheus/client_golang/prometheus"
 
 const (
 	healthy   = "healthy"
@@ -49,12 +45,7 @@ func (s *Status) AddChecker(name string, checkerFunc func(cr *CheckResponse)) *S
 // AddMetrics registers prometheus metrics to be exopsed on the /__/metrics endpoint
 // Adding the same metric twice will result in a panic
 func (s *Status) AddMetrics(cs ...prometheus.Collector) *Status {
-	if s.promRegistry == nil {
-		s.promRegistry = prometheus.NewRegistry()
-		s.promRegistry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
-		s.promRegistry.MustRegister(prometheus.NewGoCollector())
-	}
-	s.promRegistry.MustRegister(cs...)
+	prometheus.MustRegister(cs...)
 	return s
 }
 
@@ -169,14 +160,13 @@ func (s *Status) About() AboutResponse {
 // Status represents standard operational information about an application,
 // including how to establish dynamic information such as health or readiness.
 type Status struct {
-	name         string
-	description  string
-	owners       []owner
-	links        []link
-	revision     string
-	checkers     []checker
-	ready        func() bool
-	promRegistry *prometheus.Registry
+	name        string
+	description string
+	owners      []owner
+	links       []link
+	revision    string
+	checkers    []checker
+	ready       func() bool
 }
 
 type owner struct {
