@@ -1,6 +1,9 @@
 package op
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"strings"
+)
 
 const (
 	healthy   = "healthy"
@@ -34,11 +37,38 @@ func (s *Status) SetRevision(revision string) *Status {
 	return s
 }
 
+// AddCheckerWithMetrics adds a function that can check the applications health and meter the outcomes of the checks
+// Multiple checkers are allowed.  The checker functions should be capable of
+// being called concurrently (with each other and with themselves).
+func (s *Status) AddCheckerWithMetrics(name string, checkerFunc func(cr *CheckResponse)) *Status {
+	checkCounterName := strings.Replace(name, " ", "_", -1)
+	checkCounterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: checkCounterName,
+		Help: "Counts the number of times the check was healthy",
+	}, []string{"healthcheck_result"})
+	// healthyCheckCounter := prometheus.NewCounter(prometheus.CounterOpts{
+	// 	Name: checkCounterName + "_" + healthy,
+	// 	Help: "Counts the number of times the check was healthy",
+	// })
+	// unhealthyCheckCounter := prometheus.NewCounter(prometheus.CounterOpts{
+	// 	Name: checkCounterName + "_" + unhealthy,
+	// 	Help: "Counts the number of times the check was unhealthy",
+	// })
+	// degradedhealthCheckCounter := prometheus.NewCounter(prometheus.CounterOpts{
+	// 	Name: checkCounterName + "_" + degraded,
+	// 	Help: "Counts the number of times the check was degraded",
+	// })
+	s.AddMetrics(checkCounterVec)
+
+	s.checkers = append(s.checkers, checker{name, checkerFunc, checkCounterVec})
+	return s
+}
+
 // AddChecker adds a function that can check the applications health.
 // Multiple checkers are allowed.  The checker functions should be capable of
 // being called concurrently (with each other and with themselves).
 func (s *Status) AddChecker(name string, checkerFunc func(cr *CheckResponse)) *Status {
-	s.checkers = append(s.checkers, checker{name, checkerFunc})
+	s.checkers = append(s.checkers, checker{name, checkerFunc, nil})
 	return s
 }
 
@@ -111,6 +141,7 @@ func (s *Status) Check() HealthResult {
 			Action: cr.action,
 			Impact: cr.impact,
 		}
+		updateCheckMetrics(checker, cr)
 	}
 
 	var seenHealthy, seenDegraded, seenUnhealthy bool
@@ -138,6 +169,12 @@ func (s *Status) Check() HealthResult {
 	}
 
 	return hr
+}
+
+func updateCheckMetrics(checker checker, cr CheckResponse) {
+	if checker.checkCounter != nil {
+		checker.checkCounter.WithLabelValues(cr.health).Inc()
+	}
 }
 
 // About returns static information about this application or service.
@@ -205,8 +242,9 @@ type buildInfoResponse struct {
 }
 
 type checker struct {
-	name      string
-	checkFunc func(resp *CheckResponse)
+	name         string
+	checkFunc    func(resp *CheckResponse)
+	checkCounter *prometheus.CounterVec
 }
 
 // CheckResponse is used by a health check function to allow it to indicate
