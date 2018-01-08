@@ -2,7 +2,6 @@ package op
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"strings"
 )
 
 const (
@@ -34,22 +33,6 @@ func (s *Status) AddLink(description, url string) *Status {
 // SetRevision sets the source control revision string, typically a git hash.
 func (s *Status) SetRevision(revision string) *Status {
 	s.revision = revision
-	return s
-}
-
-// AddCheckerWithMetrics adds a function that can check the applications health and meter the outcomes of the checks
-// Multiple checkers are allowed.  The checker functions should be capable of
-// being called concurrently (with each other and with themselves).
-func (s *Status) AddCheckerWithMetrics(name string, checkerFunc func(cr *CheckResponse)) *Status {
-	checkCounterName := strings.Replace(name, " ", "_", -1)
-	checkCounterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: checkCounterName,
-		Help: "Counts the number of times the check was healthy",
-	}, []string{"healthcheck_result"})
-
-	s.AddMetrics(checkCounterVec)
-
-	s.checkers = append(s.checkers, checker{name, checkerFunc, checkCounterVec})
 	return s
 }
 
@@ -158,6 +141,29 @@ func (s *Status) Check() HealthResult {
 	}
 
 	return hr
+}
+
+// AddCheckerWithMetrics adds a function that can check the applications health and meter the outcomes of the checks
+// Multiple checkers are allowed.  The checker functions should be capable of
+// being called concurrently (with each other and with themselves).
+func (s *Status) AddCheckerWithMetrics(name string, checkerFunc func(cr *CheckResponse)) *Status {
+	checkCounterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: safeMetricName(name),
+		Help: "Counts the number of times the healthcheck was run based on the outcome of the check",
+	}, []string{"healthcheck_result"})
+
+	s.checkers = append(s.checkers, checker{name, checkerFunc, checkCounterVec})
+	return s
+}
+
+func safeMetricName(checkName string) string {
+	x := ""
+	for i, b := range checkName {
+		if !((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_' || b == ':' || (b >= '0' && b <= '9' && i > 0)) {
+			x = x + "_"
+		}
+	}
+	return x
 }
 
 func updateCheckMetrics(checker checker, cr CheckResponse) {
