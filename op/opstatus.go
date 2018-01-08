@@ -46,18 +46,7 @@ func (s *Status) AddCheckerWithMetrics(name string, checkerFunc func(cr *CheckRe
 		Name: checkCounterName,
 		Help: "Counts the number of times the check was healthy",
 	}, []string{"healthcheck_result"})
-	// healthyCheckCounter := prometheus.NewCounter(prometheus.CounterOpts{
-	// 	Name: checkCounterName + "_" + healthy,
-	// 	Help: "Counts the number of times the check was healthy",
-	// })
-	// unhealthyCheckCounter := prometheus.NewCounter(prometheus.CounterOpts{
-	// 	Name: checkCounterName + "_" + unhealthy,
-	// 	Help: "Counts the number of times the check was unhealthy",
-	// })
-	// degradedhealthCheckCounter := prometheus.NewCounter(prometheus.CounterOpts{
-	// 	Name: checkCounterName + "_" + degraded,
-	// 	Help: "Counts the number of times the check was degraded",
-	// })
+
 	s.AddMetrics(checkCounterVec)
 
 	s.checkers = append(s.checkers, checker{name, checkerFunc, checkCounterVec})
