@@ -1,13 +1,14 @@
 package op
 
-import (
-	"github.com/prometheus/client_golang/prometheus"
-)
+import "github.com/prometheus/client_golang/prometheus"
 
 const (
-	healthy   = "healthy"
-	degraded  = "degraded"
-	unhealthy = "unhealthy"
+	healthy           = "healthy"
+	degraded          = "degraded"
+	unhealthy         = "unhealthy"
+	healthcheckName   = "healthcheck_name"
+	healthcheckResult = "healthcheck_result"
+	healthcheckStatus = "healthcheck_status"
 )
 
 // NewStatus returns a new Status, given an application or service name and
@@ -40,7 +41,7 @@ func (s *Status) SetRevision(revision string) *Status {
 // Multiple checkers are allowed.  The checker functions should be capable of
 // being called concurrently (with each other and with themselves).
 func (s *Status) AddChecker(name string, checkerFunc func(cr *CheckResponse)) *Status {
-	s.checkers = append(s.checkers, checker{name, checkerFunc, nil})
+	s.checkers = append(s.checkers, checker{name, checkerFunc})
 	return s
 }
 
@@ -113,7 +114,7 @@ func (s *Status) Check() HealthResult {
 			Action: cr.action,
 			Impact: cr.impact,
 		}
-		updateCheckMetrics(checker, cr)
+		s.updateCheckMetrics(checker, cr)
 	}
 
 	var seenHealthy, seenDegraded, seenUnhealthy bool
@@ -143,16 +144,14 @@ func (s *Status) Check() HealthResult {
 	return hr
 }
 
-// AddCheckerWithMetrics adds a function that can check the applications health and meter the outcomes of the checks
-// Multiple checkers are allowed.  The checker functions should be capable of
-// being called concurrently (with each other and with themselves).
-func (s *Status) AddCheckerWithMetrics(name string, checkerFunc func(cr *CheckResponse)) *Status {
+// WithInstrumentedChecks enables the outcome of healthchecks to be instrumented
+func (s *Status) WithInstrumentedChecks() *Status {
 	checkCounterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: safeMetricName(name),
-		Help: "Counts the number of times the healthcheck was run based on the outcome of the check",
-	}, []string{"healthcheck_result"})
-
-	s.checkers = append(s.checkers, checker{name, checkerFunc, checkCounterVec})
+		Name: healthcheckStatus,
+		Help: "Meters the healthcheck status based for each check and for each result",
+	}, []string{healthcheckName, healthcheckResult})
+	s.checkResultCounter = checkCounterVec
+	prometheus.MustRegister(s.checkResultCounter)
 	return s
 }
 
@@ -161,14 +160,16 @@ func safeMetricName(checkName string) string {
 	for i, b := range checkName {
 		if !((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_' || b == ':' || (b >= '0' && b <= '9' && i > 0)) {
 			x = x + "_"
+		} else {
+			x = x + string(b)
 		}
 	}
 	return x
 }
 
-func updateCheckMetrics(checker checker, cr CheckResponse) {
-	if checker.checkCounter != nil {
-		checker.checkCounter.WithLabelValues(cr.health).Inc()
+func (s *Status) updateCheckMetrics(checker checker, cr CheckResponse) {
+	if s.checkResultCounter != nil {
+		s.checkResultCounter.With(map[string]string{healthcheckName: safeMetricName(checker.name), healthcheckResult: cr.health}).Inc()
 	}
 }
 
@@ -192,13 +193,14 @@ func (s *Status) About() AboutResponse {
 // Status represents standard operational information about an application,
 // including how to establish dynamic information such as health or readiness.
 type Status struct {
-	name        string
-	description string
-	owners      []owner
-	links       []link
-	revision    string
-	checkers    []checker
-	ready       func() bool
+	name               string
+	description        string
+	owners             []owner
+	links              []link
+	revision           string
+	checkers           []checker
+	ready              func() bool
+	checkResultCounter *prometheus.CounterVec
 }
 
 type owner struct {
@@ -237,9 +239,8 @@ type buildInfoResponse struct {
 }
 
 type checker struct {
-	name         string
-	checkFunc    func(resp *CheckResponse)
-	checkCounter *prometheus.CounterVec
+	name      string
+	checkFunc func(resp *CheckResponse)
 }
 
 // CheckResponse is used by a health check function to allow it to indicate
