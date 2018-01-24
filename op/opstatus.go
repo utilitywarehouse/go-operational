@@ -3,9 +3,12 @@ package op
 import "github.com/prometheus/client_golang/prometheus"
 
 const (
-	healthy   = "healthy"
-	degraded  = "degraded"
-	unhealthy = "unhealthy"
+	healthy           = "healthy"
+	degraded          = "degraded"
+	unhealthy         = "unhealthy"
+	healthcheckName   = "healthcheck_name"
+	healthcheckResult = "healthcheck_result"
+	healthcheckStatus = "healthcheck_status"
 )
 
 // NewStatus returns a new Status, given an application or service name and
@@ -111,6 +114,7 @@ func (s *Status) Check() HealthResult {
 			Action: cr.action,
 			Impact: cr.impact,
 		}
+		s.updateCheckMetrics(checker, cr)
 	}
 
 	var seenHealthy, seenDegraded, seenUnhealthy bool
@@ -140,6 +144,35 @@ func (s *Status) Check() HealthResult {
 	return hr
 }
 
+// WithInstrumentedChecks enables the outcome of healthchecks to be instrumented
+func (s *Status) WithInstrumentedChecks() *Status {
+	checkCounterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: healthcheckStatus,
+		Help: "Meters the healthcheck status based for each check and for each result",
+	}, []string{healthcheckName, healthcheckResult})
+	s.checkResultCounter = checkCounterVec
+	prometheus.MustRegister(s.checkResultCounter)
+	return s
+}
+
+func safeMetricName(checkName string) string {
+	x := ""
+	for i, b := range checkName {
+		if !((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_' || b == ':' || (b >= '0' && b <= '9' && i > 0)) {
+			x = x + "_"
+		} else {
+			x = x + string(b)
+		}
+	}
+	return x
+}
+
+func (s *Status) updateCheckMetrics(checker checker, cr CheckResponse) {
+	if s.checkResultCounter != nil {
+		s.checkResultCounter.With(map[string]string{healthcheckName: safeMetricName(checker.name), healthcheckResult: cr.health}).Inc()
+	}
+}
+
 // About returns static information about this application or service.
 func (s *Status) About() AboutResponse {
 	about := AboutResponse{
@@ -160,13 +193,14 @@ func (s *Status) About() AboutResponse {
 // Status represents standard operational information about an application,
 // including how to establish dynamic information such as health or readiness.
 type Status struct {
-	name        string
-	description string
-	owners      []owner
-	links       []link
-	revision    string
-	checkers    []checker
-	ready       func() bool
+	name               string
+	description        string
+	owners             []owner
+	links              []link
+	revision           string
+	checkers           []checker
+	ready              func() bool
+	checkResultCounter *prometheus.CounterVec
 }
 
 type owner struct {
