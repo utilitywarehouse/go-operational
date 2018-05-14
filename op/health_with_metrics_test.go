@@ -4,21 +4,22 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHealthCheckWithMetrics(t *testing.T) {
 	assert := assert.New(t)
 
 	hc := NewStatus("my app", "app description").
-		AddChecker("check the foo bar", func(cr *CheckResponse) {
+		AddChecker("check mongo", func(cr *CheckResponse) {
 			cr.Healthy("check command completed ok")
 		}).
-		AddChecker("check the unhealthy one", func(cr *CheckResponse) {
+		AddChecker("check kafka", func(cr *CheckResponse) {
 			cr.Unhealthy("thing failed", "fix the thing", "very bad")
 		}).
-		AddChecker("check the bar baz", func(cr *CheckResponse) {
+		AddChecker("check api", func(cr *CheckResponse) {
 			cr.Degraded("thing failed", "fix the thing")
 		}).WithInstrumentedChecks()
 
@@ -28,21 +29,21 @@ func TestHealthCheckWithMetrics(t *testing.T) {
 		Health:      "unhealthy",
 		CheckResults: []healthResultEntry{
 			{
-				Name:   "check the foo bar",
+				Name:   "check mongo",
 				Health: "healthy",
 				Output: "check command completed ok",
 				Action: "",
 				Impact: "",
 			},
 			{
-				Name:   "check the unhealthy one",
+				Name:   "check kafka",
 				Health: "unhealthy",
 				Output: "thing failed",
 				Action: "fix the thing",
 				Impact: "very bad",
 			},
 			{
-				Name:   "check the bar baz",
+				Name:   "check api",
 				Health: "degraded",
 				Output: "thing failed",
 				Action: "fix the thing",
@@ -54,21 +55,23 @@ func TestHealthCheckWithMetrics(t *testing.T) {
 	result := hc.Check()
 	assert.Equal(expected, result)
 	mfs, _ := prometheus.DefaultGatherer.Gather()
-	assertMetricLabelsAndValue(t, mfs, "check_the_foo_bar", healthy, 1)
-	assertMetricLabelsAndValue(t, mfs, "check_the_bar_baz", degraded, 1)
-	assertMetricLabelsAndValue(t, mfs, "check_the_unhealthy_one", unhealthy, 1)
+	assertMetricLabelsAndValue(t, mfs, "check_mongo", healthy, 1)
+	assertMetricLabelsAndValue(t, mfs, "check_mongo", degraded, 0)
+	assertMetricLabelsAndValue(t, mfs, "check_mongo", unhealthy, 0)
 
-	// Check that the metrics are actually incrementing
-	hc.Check()
-	mfs, _ = prometheus.DefaultGatherer.Gather()
-	assertMetricLabelsAndValue(t, mfs, "check_the_foo_bar", healthy, 2)
-	assertMetricLabelsAndValue(t, mfs, "check_the_bar_baz", degraded, 2)
-	assertMetricLabelsAndValue(t, mfs, "check_the_unhealthy_one", unhealthy, 2)
+	assertMetricLabelsAndValue(t, mfs, "check_kafka", healthy, 0)
+	assertMetricLabelsAndValue(t, mfs, "check_kafka", degraded, 0)
+	assertMetricLabelsAndValue(t, mfs, "check_kafka", unhealthy, 1)
+
+	assertMetricLabelsAndValue(t, mfs, "check_api", healthy, 0)
+	assertMetricLabelsAndValue(t, mfs, "check_api", degraded, 1)
+	assertMetricLabelsAndValue(t, mfs, "check_api", unhealthy, 0)
+
 }
 
 func assertMetricLabelsAndValue(t *testing.T, mfs []*dto.MetricFamily, checkname string, outcome string, value int) {
 	for _, mf := range mfs {
-		if mf.GetName() == healthcheckStatus && mf.GetType() == dto.MetricType_COUNTER {
+		if mf.GetName() == healthcheckStatus && mf.GetType() == dto.MetricType_GAUGE {
 			for _, metric := range mf.Metric {
 				matchedName, matchedResult := false, false
 				for _, metricLabel := range metric.GetLabel() {
@@ -79,9 +82,8 @@ func assertMetricLabelsAndValue(t *testing.T, mfs []*dto.MetricFamily, checkname
 						matchedResult = true
 					}
 				}
-
 				if matchedName && matchedResult {
-					assert.Equal(t, float64(value), metric.GetCounter().GetValue())
+					assert.Equal(t, float64(value), metric.GetGauge().GetValue())
 					return
 				}
 			}

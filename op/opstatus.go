@@ -1,6 +1,8 @@
 package op
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 const (
 	healthy           = "healthy"
@@ -144,14 +146,14 @@ func (s *Status) Check() HealthResult {
 	return hr
 }
 
-// WithInstrumentedChecks enables the outcome of healthchecks to be instrumented
+// WithInstrumentedChecks enables the outcome of healthchecks to be instrumented as a counter
 func (s *Status) WithInstrumentedChecks() *Status {
-	checkCounterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
+	checkGaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: healthcheckStatus,
 		Help: "Meters the healthcheck status based for each check and for each result",
 	}, []string{healthcheckName, healthcheckResult})
-	s.checkResultCounter = checkCounterVec
-	prometheus.MustRegister(s.checkResultCounter)
+	s.checkResultGauge = checkGaugeVec
+	prometheus.MustRegister(s.checkResultGauge)
 	return s
 }
 
@@ -168,8 +170,15 @@ func safeMetricName(checkName string) string {
 }
 
 func (s *Status) updateCheckMetrics(checker checker, cr CheckResponse) {
-	if s.checkResultCounter != nil {
-		s.checkResultCounter.With(map[string]string{healthcheckName: safeMetricName(checker.name), healthcheckResult: cr.health}).Inc()
+	if s.checkResultGauge != nil {
+		possibleStatuses := []string{healthy, unhealthy, degraded}
+		for _, status := range possibleStatuses {
+			if cr.health == status {
+				s.checkResultGauge.With(map[string]string{healthcheckName: safeMetricName(checker.name), healthcheckResult: status}).Set(1)
+				continue
+			}
+			s.checkResultGauge.With(map[string]string{healthcheckName: safeMetricName(checker.name), healthcheckResult: status}).Set(0)
+		}
 	}
 }
 
@@ -193,14 +202,14 @@ func (s *Status) About() AboutResponse {
 // Status represents standard operational information about an application,
 // including how to establish dynamic information such as health or readiness.
 type Status struct {
-	name               string
-	description        string
-	owners             []owner
-	links              []link
-	revision           string
-	checkers           []checker
-	ready              func() bool
-	checkResultCounter *prometheus.CounterVec
+	name             string
+	description      string
+	owners           []owner
+	links            []link
+	revision         string
+	checkers         []checker
+	ready            func() bool
+	checkResultGauge *prometheus.GaugeVec
 }
 
 type owner struct {
