@@ -100,7 +100,8 @@ func (s *Status) Ready(f func() bool) *Status {
 	return s
 }
 
-// Check returns the current health state of the application.
+// Check returns the current health state of the application. Each checker is
+// run concurrently.
 func (s *Status) Check() HealthResult {
 	hr := HealthResult{
 		Name:         s.name,
