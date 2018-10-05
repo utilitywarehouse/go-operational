@@ -108,7 +108,7 @@ func (s *Status) Check() HealthResult {
 		CheckResults: make([]healthResultEntry, len(s.checkers)),
 	}
 
-	wg := &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(len(s.checkers))
 
 	for i, ch := range s.checkers {
