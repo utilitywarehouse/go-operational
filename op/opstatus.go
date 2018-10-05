@@ -1,6 +1,8 @@
 package op
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -106,18 +108,27 @@ func (s *Status) Check() HealthResult {
 		CheckResults: make([]healthResultEntry, len(s.checkers)),
 	}
 
-	for i, checker := range s.checkers {
-		var cr CheckResponse
-		checker.checkFunc(&cr)
-		hr.CheckResults[i] = healthResultEntry{
-			Name:   checker.name,
-			Health: cr.health,
-			Output: cr.output,
-			Action: cr.action,
-			Impact: cr.impact,
-		}
-		s.updateCheckMetrics(checker, cr)
+	wg := &sync.WaitGroup{}
+	wg.Add(len(s.checkers))
+
+	for i, ch := range s.checkers {
+		go func(i int, ch checker) {
+			defer wg.Done()
+
+			var cr CheckResponse
+			ch.checkFunc(&cr)
+			hr.CheckResults[i] = healthResultEntry{
+				Name:   ch.name,
+				Health: cr.health,
+				Output: cr.output,
+				Action: cr.action,
+				Impact: cr.impact,
+			}
+			s.updateCheckMetrics(ch, cr)
+		}(i, ch)
 	}
+
+	wg.Wait()
 
 	var seenHealthy, seenDegraded, seenUnhealthy bool
 	for _, hcr := range hr.CheckResults {
