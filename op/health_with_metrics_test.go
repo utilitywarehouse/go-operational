@@ -1,11 +1,10 @@
 package op
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
-
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,10 +28,10 @@ func TestHealthCheckWithMetrics(t *testing.T) {
 		Health:      "unhealthy",
 		CheckResults: []healthResultEntry{
 			{
-				Name:   "check mongo",
-				Health: "healthy",
-				Output: "check command completed ok",
-				Action: "",
+				Name:   "check api",
+				Health: "degraded",
+				Output: "thing failed",
+				Action: "fix the thing",
 				Impact: "",
 			},
 			{
@@ -43,10 +42,10 @@ func TestHealthCheckWithMetrics(t *testing.T) {
 				Impact: "very bad",
 			},
 			{
-				Name:   "check api",
-				Health: "degraded",
-				Output: "thing failed",
-				Action: "fix the thing",
+				Name:   "check mongo",
+				Health: "healthy",
+				Output: "check command completed ok",
+				Action: "",
 				Impact: "",
 			},
 		},
@@ -66,7 +65,6 @@ func TestHealthCheckWithMetrics(t *testing.T) {
 	assertMetricLabelsAndValue(t, mfs, "check_api", healthy, 0)
 	assertMetricLabelsAndValue(t, mfs, "check_api", degraded, 1)
 	assertMetricLabelsAndValue(t, mfs, "check_api", unhealthy, 0)
-
 }
 
 func assertMetricLabelsAndValue(t *testing.T, mfs []*dto.MetricFamily, checkname string, outcome string, value int) {

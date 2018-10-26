@@ -1,6 +1,7 @@
 package op
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -18,7 +19,11 @@ const (
 // NewStatus returns a new Status, given an application or service name and
 // description.
 func NewStatus(name, description string) *Status {
-	return &Status{name: name, description: description}
+	return &Status{
+		name:        name,
+		description: description,
+		checkers:    make(map[string]checker),
+	}
 }
 
 // AddOwner adds an owner entry. Each can have a name, a slack channel or both.
@@ -45,7 +50,13 @@ func (s *Status) SetRevision(revision string) *Status {
 // Multiple checkers are allowed.  The checker functions should be capable of
 // being called concurrently (with each other and with themselves).
 func (s *Status) AddChecker(name string, checkerFunc func(cr *CheckResponse)) *Status {
-	s.checkers = append(s.checkers, checker{name, checkerFunc})
+	s.checkers[name] = checker{name, checkerFunc}
+	return s
+}
+
+// RemoveChecker removes a health checker that has been added by AddChecker.
+func (s *Status) RemoveChecker(name string) *Status {
+	delete(s.checkers, name)
 	return s
 }
 
@@ -112,21 +123,29 @@ func (s *Status) Check() HealthResult {
 	var wg sync.WaitGroup
 	wg.Add(len(s.checkers))
 
-	for i, ch := range s.checkers {
-		go func(i int, ch checker) {
+	checkerKeys := make([]string, 0, len(s.checkers))
+	for k := range s.checkers {
+		checkerKeys = append(checkerKeys, k)
+	}
+	sort.Strings(checkerKeys)
+
+	for i := 0; i < len(checkerKeys); i++ {
+		go func(idx int, ch checker) {
 			defer wg.Done()
 
 			var cr CheckResponse
 			ch.checkFunc(&cr)
-			hr.CheckResults[i] = healthResultEntry{
+
+			hr.CheckResults[idx] = healthResultEntry{
 				Name:   ch.name,
 				Health: cr.health,
 				Output: cr.output,
 				Action: cr.action,
 				Impact: cr.impact,
 			}
+
 			s.updateCheckMetrics(ch, cr)
-		}(i, ch)
+		}(i, s.checkers[checkerKeys[i]])
 	}
 
 	wg.Wait()
@@ -219,7 +238,7 @@ type Status struct {
 	owners           []owner
 	links            []link
 	revision         string
-	checkers         []checker
+	checkers         map[string]checker
 	ready            func() bool
 	checkResultGauge *prometheus.GaugeVec
 }
