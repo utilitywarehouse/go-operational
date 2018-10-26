@@ -1,8 +1,9 @@
 package op
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHealthCheck(t *testing.T) {
@@ -14,7 +15,14 @@ func TestHealthCheck(t *testing.T) {
 		}).
 		AddChecker("check the bar baz", func(cr *CheckResponse) {
 			cr.Degraded("thing failed", "fix the thing")
-		})
+		}).
+		AddChecker("hello", func(cr *CheckResponse) {
+			cr.Healthy("check hello command")
+		}).
+		AddChecker("hello", func(cr *CheckResponse) {
+			cr.Healthy("check hello command")
+		}).
+		RemoveCheckers("hello")
 
 	result := hc.Check()
 
