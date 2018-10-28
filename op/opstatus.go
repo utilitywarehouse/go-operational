@@ -49,6 +49,19 @@ func (s *Status) AddChecker(name string, checkerFunc func(cr *CheckResponse)) *S
 	return s
 }
 
+// RemoveCheckers will remove health check functions added by AddChecker.
+// If multiple checks have been added with the same name, these will all be removed.
+func (s *Status) RemoveCheckers(name string) *Status {
+	var checkers []checker
+	for _, ch := range s.checkers {
+		if ch.name != name {
+			checkers = append(checkers, ch)
+		}
+	}
+	s.checkers = checkers
+	return s
+}
+
 // AddMetrics registers prometheus metrics to be exopsed on the /__/metrics endpoint
 // Adding the same metric twice will result in a panic
 func (s *Status) AddMetrics(cs ...prometheus.Collector) *Status {
