@@ -66,6 +66,9 @@ func NewHandler(os *Status) http.Handler {
 	m.Handle("/__/ready", newReadyHandler(os))
 	m.Handle("/__/metrics", promhttp.Handler())
 
+	// Overload default mux in order to stop pprof binding handlers to it
+	http.DefaultServeMux = http.NewServeMux()
+
 	// Register PPROF handlers
 	m.Handle("/__/extended/pprof/", http.HandlerFunc(pprof.Index))
 	m.Handle("/__/extended/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
