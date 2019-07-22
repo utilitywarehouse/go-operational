@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/pprof"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -64,5 +65,22 @@ func NewHandler(os *Status) http.Handler {
 	m.Handle("/__/health", newHealthCheckHandler(os))
 	m.Handle("/__/ready", newReadyHandler(os))
 	m.Handle("/__/metrics", promhttp.Handler())
+
+	// Overload default mux in order to stop pprof binding handlers to it
+	http.DefaultServeMux = http.NewServeMux()
+
+	// Register PPROF handlers
+	m.Handle("/__/extended/pprof/", http.HandlerFunc(pprof.Index))
+	m.Handle("/__/extended/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	m.Handle("/__/extended/pprof/profile", http.HandlerFunc(pprof.Profile))
+	m.Handle("/__/extended/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	m.Handle("/__/extended/pprof/trace", http.HandlerFunc(pprof.Trace))
+	m.Handle("/__/extended/pprof/goroutine", pprof.Handler("goroutine"))
+	m.Handle("/__/extended/pprof/heap", pprof.Handler("heap"))
+	m.Handle("/__/extended/pprof/threadcreate", pprof.Handler("threadcreate"))
+	m.Handle("/__/extended/pprof/block", pprof.Handler("block"))
+	m.Handle("/__/extended/pprof/mutex", pprof.Handler("mutex"))
+	m.Handle("/__/extended/pprof/allocs", pprof.Handler("allocs"))
+
 	return m
 }
