@@ -40,3 +40,8 @@ func main() {
 	http.ListenAndServe(":8080", nil)
 }
 ```
+
+PPROF
+-------
+By default go operational will bind PPROFs handlers to the path `/__/extended/pprof/`
+We also overload the default mux in order to stop the handlers binding to the default paths. 
