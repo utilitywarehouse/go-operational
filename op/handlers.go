@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 
+	"github.com/felixge/fgprof"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -81,6 +82,10 @@ func NewHandler(os *Status) http.Handler {
 	m.Handle("/__/extended/pprof/block", pprof.Handler("block"))
 	m.Handle("/__/extended/pprof/mutex", pprof.Handler("mutex"))
 	m.Handle("/__/extended/pprof/allocs", pprof.Handler("allocs"))
+
+	// Register fgprof handlers
+	// See: https://github.com/felixge/fgprof
+	m.Handle("/__/extended/fgprof", fgprof.Handler())
 
 	return m
 }
