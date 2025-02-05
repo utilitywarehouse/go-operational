@@ -222,6 +222,8 @@ func (s *Status) logCheckResult(checker checker, cr CheckResponse) {
 		switch cr.health {
 		case unhealthy:
 			slog.Error(logMsg)
+		case degraded:
+			slog.Warn(logMsg)
 		default:
 			slog.Debug(logMsg)
 		}
