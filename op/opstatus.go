@@ -1,6 +1,8 @@
 package op
 
 import (
+	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -18,7 +20,7 @@ const (
 // NewStatus returns a new Status, given an application or service name and
 // description.
 func NewStatus(name, description string) *Status {
-	return &Status{name: name, description: description}
+	return &Status{name: name, description: description, loggerEnabled: false}
 }
 
 // AddOwner adds an owner entry. Each can have a name, a slack channel or both.
@@ -139,6 +141,7 @@ func (s *Status) Check() HealthResult {
 				Impact: cr.impact,
 			}
 			s.updateCheckMetrics(ch, cr)
+			s.logCheckResult(ch, cr)
 		}(i, ch)
 	}
 
@@ -182,6 +185,12 @@ func (s *Status) WithInstrumentedChecks() *Status {
 	return s
 }
 
+// WithChecksLogger enables the outcome of healthchecks to be logged
+func (s *Status) WithChecksLogger() *Status {
+	s.loggerEnabled = true
+	return s
+}
+
 func safeMetricName(checkName string) string {
 	x := ""
 	for i, b := range checkName {
@@ -203,6 +212,20 @@ func (s *Status) updateCheckMetrics(checker checker, cr CheckResponse) {
 				continue
 			}
 			s.checkResultGauge.With(map[string]string{healthcheckName: safeMetricName(checker.name), healthcheckResult: status}).Set(0)
+		}
+	}
+}
+
+func (s *Status) logCheckResult(checker checker, cr CheckResponse) {
+	if s.loggerEnabled {
+		logMsg := fmt.Sprintf("[%s] health-check is [%s]", checker.name, cr.health)
+		switch cr.health {
+		case unhealthy:
+			slog.Error(logMsg)
+		case degraded:
+			slog.Warn(logMsg)
+		default:
+			slog.Debug(logMsg)
 		}
 	}
 }
@@ -235,6 +258,7 @@ type Status struct {
 	checkers         []checker
 	ready            func() bool
 	checkResultGauge *prometheus.GaugeVec
+	loggerEnabled    bool
 }
 
 type owner struct {
