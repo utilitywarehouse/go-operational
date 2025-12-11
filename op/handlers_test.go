@@ -119,7 +119,7 @@ func TestHealthCheckHandler(t *testing.T) {
 	assert.Equal(expectedHealth, rr.Body.String())
 }
 
-func TestHealthCheckHandler_PostServeNewChecker(t *testing.T) {
+func TestHealthCheckHandler_PostServeAddChecker(t *testing.T) {
 	assert := assert.New(t)
 
 	st := NewStatus("name", "desc")
