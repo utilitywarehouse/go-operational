@@ -119,6 +119,33 @@ func TestHealthCheckHandler(t *testing.T) {
 	assert.Equal(expectedHealth, rr.Body.String())
 }
 
+func TestHealthCheckHandler_PostServeAddChecker(t *testing.T) {
+	assert := assert.New(t)
+
+	st := NewStatus("name", "desc")
+	h := newHealthCheckHandler(st)
+
+	req, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+
+	assert.Equal(http.StatusNotFound, rr.Code, "Expected 404 when no checkers are registered")
+
+	st.AddChecker("check1", func(cr *CheckResponse) {
+		cr.Healthy("output1")
+	})
+
+	rr2 := httptest.NewRecorder()
+	h.ServeHTTP(rr2, req)
+
+	assert.Equal(http.StatusOK, rr2.Code, "Expected 200 after adding a healthy checker")
+}
+
 func TestReadyHandlerReady(t *testing.T) {
 	assert := assert.New(t)
 
@@ -162,7 +189,6 @@ func TestReadyHandlerNotReady(t *testing.T) {
 }
 
 func TestReadyHandlerNone(t *testing.T) {
-
 	h := newReadyHandler(NewStatus("", "").ReadyNone())
 
 	req, err := http.NewRequest("GET", "/", nil)
@@ -179,8 +205,27 @@ func TestReadyHandlerNone(t *testing.T) {
 	}
 }
 
-func TestReadyHandlerDefaults(t *testing.T) {
+func TestReadyHandlerNone_PostServeHandlerReady(t *testing.T) {
+	st := NewStatus("", "").ReadyNone()
+	h := newReadyHandler(st)
 
+	req, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusNotFound, rr.Code, "Expected 404 when readiness is set to none")
+
+	st.ReadyAlways()
+
+	rr2 := httptest.NewRecorder()
+	h.ServeHTTP(rr2, req)
+	assert.Equal(t, http.StatusOK, rr2.Code, "Expected 200 after changing readiness to always")
+}
+
+func TestReadyHandlerDefaults(t *testing.T) {
 	h := newReadyHandler(&Status{})
 
 	req, err := http.NewRequest("GET", "/", nil)

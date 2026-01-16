@@ -11,11 +11,11 @@ import (
 )
 
 func newHealthCheckHandler(hc *Status) http.Handler {
-	if len(hc.checkers) == 0 {
-		return http.NotFoundHandler()
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(hc.checkers) == 0 {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Add("Content-Type", "application/json")
 		if err := newEncoder(w).Encode(hc.Check()); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -24,11 +24,12 @@ func newHealthCheckHandler(hc *Status) http.Handler {
 }
 
 func newReadyHandler(hc *Status) http.Handler {
-	if hc.ready == nil {
-		return http.NotFoundHandler()
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hc.ready == nil {
+			http.NotFound(w, r)
+			return
+		}
+
 		if hc.ready() {
 			w.Header().Add("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
@@ -40,7 +41,6 @@ func newReadyHandler(hc *Status) http.Handler {
 }
 
 func newAboutHandler(os *Status) http.Handler {
-
 	j, err := json.MarshalIndent(os.About(), "  ", "  ")
 	if err != nil {
 		panic(err)
