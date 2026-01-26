@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -64,7 +65,10 @@ func NewHandler(os *Status) http.Handler {
 	m.Handle("/__/about", newAboutHandler(os))
 	m.Handle("/__/health", newHealthCheckHandler(os))
 	m.Handle("/__/ready", newReadyHandler(os))
-	m.Handle("/__/metrics", promhttp.Handler())
+	m.Handle("/__/metrics", promhttp.InstrumentMetricHandler(
+		prometheus.DefaultRegisterer,
+		promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{EnableOpenMetrics: true})),
+	)
 
 	// Overload default mux in order to stop pprof binding handlers to it
 	http.DefaultServeMux = http.NewServeMux()
