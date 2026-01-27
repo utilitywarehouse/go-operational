@@ -56,15 +56,60 @@ func newAboutHandler(os *Status) http.Handler {
 	})
 }
 
+type opsHandler struct {
+	aboutHandler       http.Handler
+	healthCheckHandler http.Handler
+	readyHandler       http.Handler
+	prometheusHandler  http.Handler
+}
+
+type Option func(*opsHandler)
+
+func WithAboutHandler(h http.Handler) Option {
+	return func(o *opsHandler) {
+		o.aboutHandler = h
+	}
+}
+
+func WithHealthCheckHandler(h http.Handler) Option {
+	return func(o *opsHandler) {
+		o.healthCheckHandler = h
+	}
+}
+
+func WithReadyHandler(h http.Handler) Option {
+	return func(o *opsHandler) {
+		o.readyHandler = h
+	}
+}
+
+func WithPrometheusHandler(h http.Handler) Option {
+	return func(o *opsHandler) {
+		o.prometheusHandler = h
+	}
+}
+
 // NewHandler created a new HTTP handler that should be mapped to "/__/".
 // It will create all the standard endpoints it can based on how the OpStatus
 // is configured.
-func NewHandler(os *Status) http.Handler {
+func NewHandler(os *Status, opts ...Option) http.Handler {
 	m := http.NewServeMux()
-	m.Handle("/__/about", newAboutHandler(os))
-	m.Handle("/__/health", newHealthCheckHandler(os))
-	m.Handle("/__/ready", newReadyHandler(os))
-	m.Handle("/__/metrics", promhttp.Handler())
+
+	ops := &opsHandler{
+		aboutHandler:       newAboutHandler(os),
+		healthCheckHandler: newHealthCheckHandler(os),
+		readyHandler:       newReadyHandler(os),
+		prometheusHandler:  promhttp.Handler(),
+	}
+
+	for _, opt := range opts {
+		opt(ops)
+	}
+
+	m.Handle("/__/about", ops.aboutHandler)
+	m.Handle("/__/health", ops.healthCheckHandler)
+	m.Handle("/__/ready", ops.readyHandler)
+	m.Handle("/__/metrics", ops.prometheusHandler)
 
 	// Overload default mux in order to stop pprof binding handlers to it
 	http.DefaultServeMux = http.NewServeMux()
