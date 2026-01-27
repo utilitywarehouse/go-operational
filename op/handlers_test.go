@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -265,4 +266,38 @@ func TestMetricsHandler(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	assert.Equal(http.StatusOK, rr.Code, "Response status should be 200")
 	assert.True(strings.Contains(rr.Body.String(), "test_metric 1\n"), "Metrics response should contain dummy metric")
+}
+
+func TestWithMetricsHandler(t *testing.T) {
+	assert := assert.New(t)
+	metric := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "test_metric_counter",
+		Help: "Dummy counter",
+	})
+
+	s := &Status{}
+	s.AddMetrics(metric)
+	h := NewHandler(s,
+		WithPrometheusHandler(
+			promhttp.InstrumentMetricHandler(
+				prometheus.DefaultRegisterer,
+				promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{EnableOpenMetrics: true}),
+			),
+		),
+	)
+
+	metric.Inc()
+
+	req, err := http.NewRequest("GET", "/__/metrics", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	assert.Equal(http.StatusOK, rr.Code, "Response status should be 200")
+	// Still works like TestMetricsHandler but if we were using OpenTelemetry be something like
+	// test_histogram_bucket{otel_scope_name="",otel_scope_version="",service_name="infra/test-exemplars",service_version="test",le="25.0"} 87 # {trace_id="00a64c85bb55e8425980fc12d041760f",span_id="21eda5de3c6f4ceb"} 20.0 1.769186841171555e+09
+	assert.True(strings.Contains(rr.Body.String(), "test_metric_counter 1\n"), "Metrics response should contain dummy metric")
 }
