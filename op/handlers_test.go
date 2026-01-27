@@ -277,9 +277,14 @@ func TestWithMetricsHandler(t *testing.T) {
 
 	s := &Status{}
 	s.AddMetrics(metric)
-	h := NewHandler(s, WithPrometheusHandler(promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{
-		EnableOpenMetrics: true,
-	})))
+	h := NewHandler(s,
+		WithPrometheusHandler(
+			promhttp.InstrumentMetricHandler(
+				prometheus.DefaultRegisterer,
+				promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{EnableOpenMetrics: true}),
+			),
+		),
+	)
 
 	metric.Inc()
 
